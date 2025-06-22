@@ -155,70 +155,64 @@ def update_file_b(file_a_path, file_b_path):
         print(f"\n更新文件B出错: {e}")
         return None
 
+def process_and_download(uploaded_zip, uploaded_template):
+    """处理上传的文件并提供下载"""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            # 保存ZIP文件
+            zip_path = os.path.join(temp_dir, "upload.zip")
+            with open(zip_path, "wb") as f:
+                f.write(uploaded_zip.getvalue())
+            
+            # 解压ZIP
+            extract_dir = os.path.join(temp_dir, "extracted")
+            os.makedirs(extract_dir, exist_ok=True)
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(extract_dir)
+            
+            # 保存模板文件
+            template_path = os.path.join(temp_dir, "template.xlsx")
+            with open(template_path, "wb") as f:
+                f.write(uploaded_template.getvalue())
+            
+            # 调用原有处理逻辑
+            file_a_path, _ = process_file_a(extract_dir)
+            if file_a_path:
+                result_path = update_file_b(file_a_path, template_path)
+                if os.path.exists(result_path):
+                    with open(result_path, "rb") as f:
+                        st.download_button(
+                            "下载处理结果",
+                            data=f,
+                            file_name="工资调整结果.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    st.success("处理完成！")
+                else:
+                    st.error("生成结果文件失败")
+            else:
+                st.error("ZIP压缩包内未找到有效数据")
+        except Exception as e:
+            st.error(f"处理过程中出错: {str(e)}")
+
 # Streamlit界面
 def main():
-    st.title("Excel数据处理工具")
-    st.write("上传包含Excel文件的ZIP压缩包和模板文件，自动处理数据")
+    st.title("工资调整自动汇总与填充工具")
     
     # 文件上传区域
-    uploaded_zip = st.file_uploader("上传包含Excel文件的ZIP压缩包", type="zip")
-    uploaded_template = st.file_uploader("上传模板文件", type=["xlsx", "xls"])
-
-    # 添加触发按钮（必须同时上传两个文件才显示按钮）
-    if uploaded_zip and uploaded_template:
-        if st.button("开始处理", type="primary"):  # 绿色高亮按钮
-            with st.spinner("处理中..."):
-               # 调用您的处理函数
-                process_and_download(uploaded_zip, uploaded_template)
+    col1, col2 = st.columns(2)
+    with col1:
+        uploaded_zip = st.file_uploader("上传ZIP压缩包", type="zip")
+    with col2:
+        uploaded_template = st.file_uploader("上传模板文件", type=["xlsx"])
     
-    if st.button("开始处理") and uploaded_zip and uploaded_template:
-        with st.spinner("正在处理文件，请稍候..."):
-            # 创建临时目录
-            with tempfile.TemporaryDirectory() as temp_dir:
-                # 保存上传的文件到临时位置
-                zip_path = os.path.join(temp_dir, "uploaded_files.zip")
-                with open(zip_path, "wb") as f:
-                    f.write(uploaded_zip.getvalue())
-                
-                template_path = os.path.join(temp_dir, "template.xlsx")
-                with open(template_path, "wb") as f:
-                    f.write(uploaded_template.getvalue())
-                
-                # 解压ZIP文件
-                extract_dir = os.path.join(temp_dir, "extracted")
-                os.makedirs(extract_dir, exist_ok=True)
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(extract_dir)
-                
-                # 第一步：处理文件A
-                st.info("正在处理文件夹生成文件A...")
-                file_a_path, all_values = process_file_a(extract_dir)
-                
-                if file_a_path and all_values:
-                    # 显示部分数据
-                    st.success("文件A处理完成！")
-                    st.write("前5个数值示例:")
-                    sample_data = {k: v for i, (k, v) in enumerate(all_values.items()) if i < 5}
-                    st.write(sample_data)
-                    
-                    # 第二步：更新文件B
-                    st.info("正在用文件A更新文件B...")
-                    result_path = update_file_b(file_a_path, template_path)
-                    
-                    if result_path and os.path.exists(result_path):
-                        # 提供下载链接
-                        with open(result_path, "rb") as f:
-                            st.download_button(
-                                label="下载处理后的文件B",
-                                data=f,
-                                file_name="处理结果.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                            )
-                        st.success("处理完成！")
-                    else:
-                        st.error("更新文件B失败")
-                else:
-                    st.error("未能生成有效的文件A，请检查输入文件")
-
+    # 添加明确的处理按钮
+    if uploaded_zip and uploaded_template:
+        if st.button("开始处理", type="primary", help="点击后开始处理数据"):
+            with st.spinner("正在处理，请稍候..."):
+                process_and_download(uploaded_zip, uploaded_template)
+    else:
+        st.warning("请先上传ZIP压缩包和模板文件")
+        
 if __name__ == "__main__":
     main()
