@@ -15,7 +15,7 @@ def process_file_a(folder_path, output_file="文件A_汇总结果.xlsx"):
     all_values = {}
     
     for filename in os.listdir(folder_path):
-        if filename.endswith(('.xls', '.xlsx')) and not filename.startswith('~$'):
+        if filename.endswith(('.xls', '.xlsx')):
             filepath = os.path.join(folder_path, filename)
             try:
                 # 读取Excel，第四行作为表头
@@ -156,44 +156,46 @@ def update_file_b(file_a_path, file_b_path):
         return None
 
 def process_and_download(uploaded_zip, uploaded_template):
-    """处理上传的文件并提供下载"""
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
-            # 保存ZIP文件
-            zip_path = os.path.join(temp_dir, "upload.zip")
-            with open(zip_path, "wb") as f:
-                f.write(uploaded_zip.getvalue())
-            
-            # 解压ZIP
+            # 1. 解压ZIP
             extract_dir = os.path.join(temp_dir, "extracted")
             os.makedirs(extract_dir, exist_ok=True)
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall(extract_dir)
             
-            # 保存模板文件
+            try:
+                uploaded_zip.seek(0)  # 重要：确保文件指针在开头
+                with zipfile.ZipFile(uploaded_zip, 'r') as zip_ref:
+                    st.info(f"ZIP中包含的文件: {zip_ref.namelist()}")  # 调试信息
+                    zip_ref.extractall(extract_dir)
+                    st.success("解压完成")
+            except zipfile.BadZipFile:
+                st.error("错误：ZIP文件损坏或格式不正确")
+                return
+            
+            # 2. 处理模板文件
             template_path = os.path.join(temp_dir, "template.xlsx")
             with open(template_path, "wb") as f:
-                f.write(uploaded_template.getvalue())
+                uploaded_template.seek(0)
+                f.write(uploaded_template.read())
             
-            # 调用原有处理逻辑
+            # 3. 执行处理流程
             file_a_path, _ = process_file_a(extract_dir)
-            if file_a_path:
-                result_path = update_file_b(file_a_path, template_path)
-                if os.path.exists(result_path):
-                    with open(result_path, "rb") as f:
-                        st.download_button(
-                            "下载处理结果",
-                            data=f,
-                            file_name="工资调整结果.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                    st.success("处理完成！")
-                else:
-                    st.error("生成结果文件失败")
-            else:
-                st.error("ZIP压缩包内未找到有效数据")
+            if not file_a_path:
+                st.error("未生成文件A，请检查ZIP内容是否符合要求")
+                return
+                
+            result_path = update_file_b(file_a_path, template_path)
+            if result_path and os.path.exists(result_path):
+                with open(result_path, "rb") as f:
+                    st.download_button(
+                        "下载结果",
+                        data=f,
+                        file_name="结果.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
         except Exception as e:
-            st.error(f"处理过程中出错: {str(e)}")
+            st.error(f"处理失败: {str(e)}")
+            st.exception(e)  # 显示完整错误堆栈
 
 # Streamlit界面
 def main():
