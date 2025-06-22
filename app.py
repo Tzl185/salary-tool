@@ -163,6 +163,13 @@ def main():
     # 文件上传区域
     uploaded_zip = st.file_uploader("上传包含Excel文件的ZIP压缩包", type="zip")
     uploaded_template = st.file_uploader("上传模板文件", type=["xlsx", "xls"])
+
+    # 添加触发按钮（必须同时上传两个文件才显示按钮）
+    if uploaded_zip and uploaded_template:
+        if st.button("开始处理", type="primary"):  # 绿色高亮按钮
+            with st.spinner("处理中..."):
+               # 调用您的处理函数
+                process_and_download(uploaded_zip, uploaded_template)
     
     if st.button("开始处理") and uploaded_zip and uploaded_template:
         with st.spinner("正在处理文件，请稍候..."):
